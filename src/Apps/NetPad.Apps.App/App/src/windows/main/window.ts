@@ -1,10 +1,7 @@
 import {IContainer} from "aurelia";
-import {watch} from "@aurelia/runtime-html";
 import {
-    CreateScriptDto,
     DataConnectionStore,
     IPaneManager,
-    IScriptService,
     ISession,
     IShortcutManager,
     MonacoEnvironmentManager,
@@ -34,7 +31,6 @@ export class Window extends WindowBase {
         @ISession private readonly session: ISession,
         @IShortcutManager private readonly shortcutManager: IShortcutManager,
         @IPaneManager private readonly paneManager: IPaneManager,
-        @IScriptService private readonly scriptService: IScriptService,
         @IContainer private readonly container: IContainer,
         private readonly dataConnectionStore: DataConnectionStore) {
         super();
@@ -50,7 +46,9 @@ export class Window extends WindowBase {
         await this.dataConnectionStore.initialize();
         this.workbench = this.container.get(Workbench);
 
-        await this.createNewScriptIfNoScriptsOpen();
+        // Creates the initial viewer host, wires workbench-level command handlers.
+        // Must run before the WorkArea component attaches.
+        await this.workbench.workAreaService.initialize();
     }
 
     public attached() {
@@ -92,12 +90,5 @@ export class Window extends WindowBase {
 
         // Always start output pane hidden when app starts
         setTimeout(() => outputPane.hide(), 1);
-    }
-
-    @watch<Window>(vm => vm.session.environments.length)
-    private async createNewScriptIfNoScriptsOpen() {
-        if (this.session.environments.length === 0) {
-            await this.scriptService.create(new CreateScriptDto());
-        }
     }
 }

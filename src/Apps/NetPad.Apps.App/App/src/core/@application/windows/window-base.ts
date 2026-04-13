@@ -8,7 +8,7 @@ export abstract class WindowBase extends ViewModelBase {
     protected constructor() {
         super(resolve(ILogger));
         this.observerLocator = resolve(IObserverLocator);
-        this.logger = resolve(ILogger).scopeTo((this as Record<string, unknown>).constructor.name);
+        this.logger = resolve(ILogger).scopeTo(this.constructor.name);
     }
 
     protected get classes() {

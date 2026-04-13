@@ -17,8 +17,8 @@ describe("LangLogoValueConverter", () => {
         [undefined],
         [""],
         ["Unknown"],
-    ])("given invalid value %p, should return null",
+    ])("given invalid value %p, should return undefined",
         (value) => {
-            expect(converter.toView(value as never)).toBeNull();
+            expect(converter.toView(value as never)).toBeUndefined();
         });
 });

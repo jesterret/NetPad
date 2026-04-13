@@ -1,33 +1,26 @@
-﻿import {ILogger} from "aurelia";
+import {ILogger} from "aurelia";
 import {Viewer} from "../viewer";
 import {ViewableObject} from "../viewable-object";
-import {IEventBus, IScriptService} from "@application";
 import {ITextEditor} from "@application/editor/text-editor";
-import {ViewableAppScriptDocument, ViewableTextDocument} from "./viewable-text-document";
-import {ViewerHost} from "../viewer-host";
+import {ViewableScriptDocument} from "./viewable-script-document";
 import {Workbench} from "../../../workbench";
-import {DndType} from "@application/dnd/dnd-type";
 import {DragAndDropBase} from "@application/dnd/drag-and-drop-base";
-import {DataConnectionDnd} from "@application/dnd/data-connection-dnd";
 import {VimStatusbarItem} from "@application/editor/vim/vim-statusbar-item";
 import {TextEditorCursorPositionStatusbarItem} from "@application/editor/text-editor-cursor-position-statusbar-item";
 
-export class TextDocumentViewer extends Viewer {
+export class ScriptViewer extends Viewer {
     public editor: ITextEditor;
 
     constructor(
-        host: ViewerHost,
         private readonly workbench: Workbench,
-        @IScriptService private readonly scriptService: IScriptService,
-        @IEventBus private readonly eventBus: IEventBus,
-        logger: ILogger
+        @ILogger logger: ILogger
     ) {
-        super(host, logger);
+        super(logger);
     }
 
     public attached() {
         if (this.viewable && (!this.editor.active || this.editor.active.id !== this.viewable.id)) {
-            this.open(this.viewable as ViewableTextDocument);
+            this.open(this.viewable as ViewableScriptDocument);
         }
 
         this.workbench.statusbarService.addItem(TextEditorCursorPositionStatusbarItem, "right");
@@ -38,40 +31,39 @@ export class TextDocumentViewer extends Viewer {
     }
 
     public override canOpen(viewableDocument: ViewableObject): boolean {
-        return viewableDocument instanceof ViewableTextDocument;
+        return viewableDocument instanceof ViewableScriptDocument;
     }
 
-    public open(viewableDocument: ViewableTextDocument) {
+    public open(viewableDocument: ViewableScriptDocument) {
         if (!this.canOpen(viewableDocument)) {
-            this.logger.error(`Cannot open object`, viewableDocument);
+            this.logger.error(`Cannot open script document`, viewableDocument);
             return;
         }
 
-        const logger = this.logger.scopeTo(viewableDocument.toString());
-
         this.viewable = viewableDocument;
+
+        const logger = this.logger.scopeTo(viewableDocument.toString());
 
         // This method can be called before the editor is attached
         if (this.editor) {
-            logger.debug("Opening in editor");
+            logger.debug("Opening script document in editor");
             this.editor.open(viewableDocument.textDocument);
         } else {
-            logger.debug("Editor not ready yet, will not open in editor");
+            logger.debug("Editor not ready yet, will not open script document in editor");
         }
     }
 
-    public close(viewableDocument: ViewableTextDocument) {
+    public close(viewableDocument: ViewableScriptDocument) {
         const logger = this.logger.scopeTo(viewableDocument.toString());
-        logger.debug(`Closing app script, looking in cache...`);
-
+        logger.debug(`Closing script document`);
         this.editor.close(viewableDocument.textDocument.id);
     }
 
     public itemDropped(event: DragEvent) {
         const dnd = DragAndDropBase.getFromEventData(event);
 
-        if (dnd?.type == DndType.DataConnection && this.viewable instanceof ViewableAppScriptDocument) {
-            this.scriptService.setDataConnection(this.viewable.environment.script.id, (dnd as DataConnectionDnd).dataConnectionId);
+        if (this.viewable?.canHandleDrop(dnd)) {
+            this.viewable.handleDrop(dnd as DragAndDropBase);
         }
     }
 }

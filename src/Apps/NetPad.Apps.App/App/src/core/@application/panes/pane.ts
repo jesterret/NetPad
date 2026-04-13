@@ -9,7 +9,7 @@ export abstract class Pane {
 
     protected constructor(name: string, public readonly icon?: string, public readonly showNameInHeader: boolean = true) {
         this._name = name;
-        this.logger = resolve(ILogger).scopeTo((this as Record<string, unknown>).constructor.name)
+        this.logger = resolve(ILogger).scopeTo(this.constructor.name)
     }
 
     public get name(): string {

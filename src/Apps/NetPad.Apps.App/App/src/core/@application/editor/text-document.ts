@@ -1,6 +1,7 @@
 import {SubscriptionToken, WithDisposables} from "@common";
 import * as monaco from "monaco-editor";
-import {MonacoEditorUtil, TextLanguage} from "@application";
+import {MonacoEditorUtil} from "@application/editor/monaco/monaco-editor-util";
+import {TextLanguage} from "@application/editor/text-language";
 
 export type TextChangeSetter = TextDocument | "server";
 
@@ -74,11 +75,14 @@ export class TextDocument extends WithDisposables {
 
     public changeLanguage(language: TextLanguage) {
         this._language = language;
-        monaco.editor.setModelLanguage(this.textModel, language);
+        // Skip the Monaco update if no model exists yet
+        if (this._textModel) {
+            monaco.editor.setModelLanguage(this._textModel, language);
+        }
     }
 
     public override toString() {
-        return `${(this as Record<string, unknown>).constructor.name}: ${this.id}`;
+        return `${this.constructor.name}: ${this.id}`;
     }
 
     public override dispose(): void {

@@ -47,7 +47,7 @@ export class ScriptsList extends ViewModelBase {
                 text: "Open",
                 onSelected: async (target) => {
                     const script = this.getScriptFromElement(target);
-                    if (script) await this.session.openByPath(script.path);
+                    if (script?.path) await this.session.openByPath(script.path);
                 }
             },
             {

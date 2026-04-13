@@ -1858,6 +1858,8 @@ export interface IScriptsApiClient {
 
     getScript(id: string, signal?: AbortSignal | undefined): Promise<Script>;
 
+    delete(id: string, signal?: AbortSignal | undefined): Promise<void>;
+
     getCode(id: string, signal?: AbortSignal | undefined): Promise<string>;
 
     updateCode(id: string, code: string, externallyInitiated: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
@@ -1869,6 +1871,8 @@ export interface IScriptsApiClient {
     duplicate(id: string, signal?: AbortSignal | undefined): Promise<Script>;
 
     save(id: string, signal?: AbortSignal | undefined): Promise<boolean>;
+
+    deleteFolder(path: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
     run(id: string, options: RunOptions, signal?: AbortSignal | undefined): Promise<void>;
 
@@ -2032,6 +2036,40 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             });
         }
         return Promise.resolve<Script>(null as any);
+    }
+
+    delete(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processDelete(_response);
+        });
+    }
+
+    protected processDelete(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     getCode(id: string, signal?: AbortSignal): Promise<string> {
@@ -2267,6 +2305,41 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             });
         }
         return Promise.resolve<boolean>(null as any);
+    }
+
+    deleteFolder(path: string | undefined, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/folder?";
+        if (path === null)
+            throw new Error("The parameter 'path' cannot be null.");
+        else if (path !== undefined)
+            url_ += "path=" + encodeURIComponent("" + path) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processDeleteFolder(_response);
+        });
+    }
+
+    protected processDeleteFolder(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     run(id: string, options: RunOptions, signal?: AbortSignal): Promise<void> {
@@ -5571,7 +5644,7 @@ export type ScriptOutputFormat = "Text" | "Html" | "Json";
 export class HeadlessRunRequest implements IHeadlessRunRequest {
     code!: string;
     kind!: string;
-    packages?: PackageReferenceDto[] | undefined;
+    references?: Reference[] | undefined;
     targetFramework?: DotNetFrameworkVersion | undefined;
     dataConnectionId?: string | undefined;
     timeoutMs?: number | undefined;
@@ -5589,10 +5662,10 @@ export class HeadlessRunRequest implements IHeadlessRunRequest {
         if (_data) {
             this.code = _data["code"];
             this.kind = _data["kind"];
-            if (Array.isArray(_data["packages"])) {
-                this.packages = [] as any;
-                for (let item of _data["packages"])
-                    this.packages!.push(PackageReferenceDto.fromJS(item));
+            if (Array.isArray(_data["references"])) {
+                this.references = [] as any;
+                for (let item of _data["references"])
+                    this.references!.push(Reference.fromJS(item));
             }
             this.targetFramework = _data["targetFramework"];
             this.dataConnectionId = _data["dataConnectionId"];
@@ -5611,10 +5684,10 @@ export class HeadlessRunRequest implements IHeadlessRunRequest {
         data = typeof data === 'object' ? data : {};
         data["code"] = this.code;
         data["kind"] = this.kind;
-        if (Array.isArray(this.packages)) {
-            data["packages"] = [];
-            for (let item of this.packages)
-                data["packages"].push(item ? item.toJSON() : <any>undefined);
+        if (Array.isArray(this.references)) {
+            data["references"] = [];
+            for (let item of this.references)
+                data["references"].push(item ? item.toJSON() : <any>undefined);
         }
         data["targetFramework"] = this.targetFramework;
         data["dataConnectionId"] = this.dataConnectionId;
@@ -5633,57 +5706,10 @@ export class HeadlessRunRequest implements IHeadlessRunRequest {
 export interface IHeadlessRunRequest {
     code: string;
     kind: string;
-    packages?: PackageReferenceDto[] | undefined;
+    references?: Reference[] | undefined;
     targetFramework?: DotNetFrameworkVersion | undefined;
     dataConnectionId?: string | undefined;
     timeoutMs?: number | undefined;
-}
-
-export class PackageReferenceDto implements IPackageReferenceDto {
-    id!: string;
-    version?: string | undefined;
-
-    constructor(data?: IPackageReferenceDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.version = _data["version"];
-        }
-    }
-
-    static fromJS(data: any): PackageReferenceDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new PackageReferenceDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["version"] = this.version;
-        return data;
-    }
-
-    clone(): PackageReferenceDto {
-        const json = this.toJSON();
-        let result = new PackageReferenceDto();
-        result.init(json);
-        return result;
-    }
-}
-
-export interface IPackageReferenceDto {
-    id: string;
-    version?: string | undefined;
 }
 
 /** Information about a package. */
@@ -6274,6 +6300,7 @@ export class CreateScriptDto implements ICreateScriptDto {
     optimizationLevel?: OptimizationLevel | undefined;
     useAspNet?: boolean | undefined;
     namespaces?: string[] | undefined;
+    references?: Reference[] | undefined;
     runImmediately!: boolean;
 
     constructor(data?: ICreateScriptDto) {
@@ -6298,6 +6325,11 @@ export class CreateScriptDto implements ICreateScriptDto {
                 this.namespaces = [] as any;
                 for (let item of _data["namespaces"])
                     this.namespaces!.push(item);
+            }
+            if (Array.isArray(_data["references"])) {
+                this.references = [] as any;
+                for (let item of _data["references"])
+                    this.references!.push(Reference.fromJS(item));
             }
             this.runImmediately = _data["runImmediately"];
         }
@@ -6324,6 +6356,11 @@ export class CreateScriptDto implements ICreateScriptDto {
             for (let item of this.namespaces)
                 data["namespaces"].push(item);
         }
+        if (Array.isArray(this.references)) {
+            data["references"] = [];
+            for (let item of this.references)
+                data["references"].push(item ? item.toJSON() : <any>undefined);
+        }
         data["runImmediately"] = this.runImmediately;
         return data;
     }
@@ -6345,6 +6382,7 @@ export interface ICreateScriptDto {
     optimizationLevel?: OptimizationLevel | undefined;
     useAspNet?: boolean | undefined;
     namespaces?: string[] | undefined;
+    references?: Reference[] | undefined;
     runImmediately: boolean;
 }
 

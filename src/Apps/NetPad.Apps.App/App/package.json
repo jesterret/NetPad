@@ -26,6 +26,7 @@
     },
     "jest": {
         "testEnvironment": "jsdom",
+        "setupFiles": ["<rootDir>/src/core/@common/globals.ts"],
         "transform": {
             "\\.(css|less|sass|scss|styl|jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "jest-transform-stub",
             "\\.(ts|html)$": [
@@ -39,7 +40,8 @@
             "@common/(.*)": "<rootDir>/src/core/@common/$1",
             "@common": "<rootDir>/src/core/@common",
             "@application/(.*)": "<rootDir>/src/core/@application/$1",
-            "@application": "<rootDir>/src/core/@application"
+            "@application": "<rootDir>/src/core/@application",
+            "^monaco-editor(/.*)?$": "<rootDir>/test/stubs/monaco-stub.ts"
         },
         "collectCoverage": false,
         "collectCoverageFrom": [
