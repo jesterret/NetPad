@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis;
 using NetPad.Common;
 using NetPad.Data;
@@ -10,7 +11,7 @@ namespace NetPad.Apps.Scripts;
 /// <summary>
 /// Serializes and deserializes the standard NetPad script file format.
 /// </summary>
-public class ScriptSerializer : IScriptSerializer
+public class ScriptSerializer(IDotNetInfo dotnetInfo) : IScriptSerializer
 {
     public ScriptFileFormat Format => ScriptFileFormat.Standard;
     public string FileExtension => Script.STANDARD_EXTENSION;
@@ -52,8 +53,10 @@ public class ScriptSerializer : IScriptSerializer
                $"{script.Code}";
     }
 
-    public async Task<Script> DeserializeAsync(string name, string data, IDataConnectionRepository dataConnectionRepository, IDotNetInfo dotNetInfo)
+    public async Task<Script> DeserializeAsync(string path, IDataConnectionRepository dataConnectionRepository, IDotNetInfo dotNetInfo)
     {
+        string name = Script.GetNameFromPath(path);
+        var data = File.ReadAllText(path);
         var lines = data.Split("\n").ToList();
 
         // Parse ID
@@ -108,10 +111,11 @@ public class ScriptSerializer : IScriptSerializer
         return scriptData;
     }
 
-    public bool TryReadSummary(string path, out Guid? id, out ScriptKind? kind)
+    public bool TryReadSummary(string path, [NotNullWhen(true)] out ScriptSummary? summary)
     {
-        id = null;
-        kind = null;
+        Guid? id = null;
+        ScriptData? data = null;
+        summary = null;
 
         using var sr = File.OpenText(path);
         int lineNumber = 0;
@@ -128,13 +132,17 @@ public class ScriptSerializer : IScriptSerializer
             }
             else if (lineNumber == 2)
             {
-                var scriptData = DeserializeScriptData(line);
-                kind = scriptData?.Config.Kind;
-                return true;
+                data = DeserializeScriptData(line);
+                break;
             }
         }
 
-        return id.HasValue;
+        if (data is null || id is null)
+            return false;
+
+        var config = data.Config.ToScriptConfig(dotnetInfo);
+        summary = new(id.Value, Script.GetNameFromPath(path), path, config.Kind, config.TargetFrameworkVersion, data.DataConnection?.Id);
+        return true;
     }
 
 

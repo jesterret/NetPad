@@ -72,7 +72,7 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
                 return;
             }
 
-            foreach (var writer in _externalOutputWriters)
+            foreach (var writer in _externalOutputWriters.ToArray())
             {
                 try
                 {
@@ -155,6 +155,10 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
 
             var exitCode = await _scriptProcess.WaitForExitTask;
 
+            // Flush any remaining buffered output. The debounced RawOutputHandler may
+            // still have queued items that haven't been pushed to output writers yet.
+            _rawOutputHandler.Flush();
+
             stopWatch.Stop();
             var elapsed = stopWatch.ElapsedMilliseconds;
 
@@ -178,7 +182,7 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error running script");
-            await _output.WriteAsync(new ErrorScriptOutput(ex));
+            await _output.WriteAsync(new ScriptOutput(ScriptOutputKind.Error, ex.ToString()));
             return RunResult.RunAttemptFailure();
         }
         finally
@@ -207,6 +211,7 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
             _logger.LogError(ex, "Error killing script process");
         }
 
+        _scriptProcess.Process.Dispose();
         _scriptProcess = null;
         return Task.CompletedTask;
     }

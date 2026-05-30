@@ -47,7 +47,7 @@ export class ScriptsList extends ViewModelBase {
                 text: "Open",
                 onSelected: async (target) => {
                     const script = this.getScriptFromElement(target);
-                    if (script) await this.session.openByPath(script.path);
+                    if (script?.path) await this.session.openByPath(script.path);
                 }
             },
             {
@@ -198,6 +198,10 @@ export class ScriptsList extends ViewModelBase {
             this.settings.scriptsDirectoryPath.replaceAll("\\", "/"), "/");
 
         for (const script of scripts) {
+            if (!script.path) {
+                continue;
+            }
+
             let path = script.path.replaceAll("\\", "/");
 
             if (path.startsWith(scriptsDirPath)) {

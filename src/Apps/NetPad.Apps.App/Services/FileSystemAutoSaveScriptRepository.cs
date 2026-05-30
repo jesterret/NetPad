@@ -62,11 +62,11 @@ public class FileSystemAutoSaveScriptRepository : IAutoSaveScriptRepository
             scriptName = _scriptNameGenerator.Generate();
         }
 
-        var data = await File.ReadAllTextAsync(autoSavedScriptPath).ConfigureAwait(false);
+        var script = await _serializerFactory
+            .GetForPath(autoSavedScriptPath)
+            .DeserializeAsync(autoSavedScriptPath, _dataConnectionRepository, _dotNetInfo);
 
-        var script = await _serializerFactory.GetForPath(autoSavedScriptPath)
-            .DeserializeAsync(scriptName, data, _dataConnectionRepository, _dotNetInfo);
-
+        script.SetName(scriptName);
         if (repoScript?.Path != null)
             script.SetPath(repoScript.Path);
 

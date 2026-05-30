@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using NetPad.Common;
@@ -65,7 +66,7 @@ public class MarkdownScriptSerializer : IScriptSerializer
         var frontmatter = new ScriptFrontmatter
         {
             Id = script.Id,
-            Kind = script.Config.Kind.ToString(),
+            Kind = script.Config.Kind,
             TargetFramework = script.Config.TargetFrameworkVersion.GetTargetFrameworkMoniker(),
             OptimizationLevel = script.Config.OptimizationLevel == OptimizationLevel.Release ? "Release" : "Debug",
             UseAspNet = script.Config.UseAspNet,
@@ -103,12 +104,10 @@ public class MarkdownScriptSerializer : IScriptSerializer
         return sb.ToString();
     }
 
-    public async Task<Script> DeserializeAsync(
-        string name,
-        string data,
-        IDataConnectionRepository dataConnectionRepository,
-        IDotNetInfo dotNetInfo)
+    public async Task<Script> DeserializeAsync(string path, IDataConnectionRepository dataConnectionRepository, IDotNetInfo dotNetInfo)
     {
+        var name = Script.GetNameFromPath(path);
+        var data = await File.ReadAllTextAsync(path);
         var lines = data.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
 
         if (lines.Count < 2 || lines[0].Trim() != FrontmatterDelimiter)
@@ -164,10 +163,10 @@ public class MarkdownScriptSerializer : IScriptSerializer
         return script;
     }
 
-    public bool TryReadSummary(string path, out Guid? id, out ScriptKind? kind)
+    public bool TryReadSummary(string path, [NotNullWhen(true)] out ScriptSummary? summary)
     {
-        id = null;
-        kind = null;
+        summary = null;
+        ScriptFrontmatter? frontmatter = null;
 
         using var sr = File.OpenText(path);
         string? line;
@@ -186,34 +185,18 @@ public class MarkdownScriptSerializer : IScriptSerializer
                 continue;
             }
 
-            if (trimmed == FrontmatterDelimiter)
-                return id.HasValue;
-
-            if (trimmed.StartsWith("id:", StringComparison.OrdinalIgnoreCase))
-            {
-                var value = trimmed["id:".Length..].Trim();
-                if (Guid.TryParse(value, out var parsedId))
-                    id = parsedId;
-            }
-            else if (trimmed.StartsWith("kind:", StringComparison.OrdinalIgnoreCase))
-            {
-                var value = trimmed["kind:".Length..].Trim();
-                if (Enum.TryParse<ScriptKind>(value, ignoreCase: true, out var parsedKind))
-                    kind = parsedKind;
-            }
-
-            if (id.HasValue && kind.HasValue)
-                return true;
         }
 
+        if (frontmatter is not { Kind: {} kind, TargetFramework: {} } || DotNetFrameworkVersionUtil.TryGetFrameworkVersion(frontmatter.TargetFramework, out var frameworkVersion))
+            return false;
+
+        summary = new(frontmatter.Id, Script.GetNameFromPath(path), path, kind, frameworkVersion.GetValueOrDefault(), frontmatter.DataConnection?.Id);
         return false;
     }
 
     private static ScriptConfig BuildScriptConfig(ScriptFrontmatter fm, IDotNetInfo dotNetInfo)
     {
-        var kind = Enum.TryParse<ScriptKind>(fm.Kind, ignoreCase: true, out var parsedKind)
-            ? parsedKind
-            : ScriptKind.Program;
+        var kind = fm.Kind ?? ScriptKind.Program;
 
         DotNetFrameworkVersion? parsedFramework = null;
         if (fm.TargetFramework != null &&
@@ -256,7 +239,7 @@ public class MarkdownScriptSerializer : IScriptSerializer
     private class ScriptFrontmatter
     {
         public Guid Id { get; set; }
-        public string? Kind { get; set; }
+        public ScriptKind? Kind { get; set; }
         public string? TargetFramework { get; set; }
         public string? OptimizationLevel { get; set; }
         public bool UseAspNet { get; set; }

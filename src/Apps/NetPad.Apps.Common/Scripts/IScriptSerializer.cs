@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using NetPad.Data;
 using NetPad.DotNet;
 using NetPad.Scripts;
@@ -21,16 +22,12 @@ public interface IScriptSerializer
     string Serialize(Script script);
 
     /// <summary>Deserializes a script from its on-disk representation.</summary>
-    Task<Script> DeserializeAsync(
-        string name,
-        string data,
-        IDataConnectionRepository dataConnectionRepository,
-        IDotNetInfo dotNetInfo);
+    Task<Script> DeserializeAsync(string path, IDataConnectionRepository dataConnectionRepository, IDotNetInfo dotNetInfo);
 
     /// <summary>
     /// Reads just enough of the file at <paramref name="path"/> to extract the script ID and kind
     /// without fully deserializing the script. Returns <see langword="false"/> if the file cannot
     /// be parsed by this serializer.
     /// </summary>
-    bool TryReadSummary(string path, out Guid? id, out ScriptKind? kind);
+    bool TryReadSummary(string path, [NotNullWhen(true)] out ScriptSummary? summary);
 }

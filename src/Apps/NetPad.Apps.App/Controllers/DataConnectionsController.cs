@@ -33,7 +33,7 @@ public class DataConnectionsController(IMediator mediator) : ControllerBase
     }
 
     [HttpGet]
-    public async Task<GetAllConnectionsQuery.Response> GetAll() => await mediator.Send(new GetAllConnectionsQuery());
+    public async Task<GetAllConnectionsQuery.GetAllConnectionsResponse> GetAll() => await mediator.Send(new GetAllConnectionsQuery());
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<DataConnection?>> Get(Guid id)
@@ -97,6 +97,21 @@ public class DataConnectionsController(IMediator mediator) : ControllerBase
         [FromServices] IDataConnectionPasswordProtector passwordProtector) =>
         await dataConnection.TestConnectionAsync(passwordProtector);
 
+    [HttpPatch("{id:guid}/test")]
+    public async Task<DataConnectionTestResult> TestById(
+        Guid id,
+        [FromServices] IDataConnectionPasswordProtector passwordProtector)
+    {
+        var dataConnection = await mediator.Send(new GetDataConnectionQuery(id));
+
+        if (dataConnection == null)
+        {
+            throw new InvalidOperationException($"Data connection not found: {id}");
+        }
+
+        return await dataConnection.TestConnectionAsync(passwordProtector);
+    }
+
     [HttpPatch("protect-password")]
     public string? ProtectPassword(
         [FromBody] string unprotectedPassword,
@@ -118,6 +133,35 @@ public class DataConnectionsController(IMediator mediator) : ControllerBase
         }
 
         return await dbConnection.GetDatabasesAsync(passwordProtector);
+    }
+
+    [HttpPatch("{id:guid}/databases")]
+    public async Task<IEnumerable<string>> GetDatabasesById(
+        Guid id,
+        [FromServices] IDataConnectionPasswordProtector passwordProtector)
+    {
+        var dataConnection = await mediator.Send(new GetDataConnectionQuery(id));
+
+        if (dataConnection is DatabaseServerConnection serverConnection)
+            return await serverConnection.GetDatabasesAsync(passwordProtector);
+
+        if (dataConnection is EntityFrameworkDatabaseConnection dbConnection)
+            return await dbConnection.GetDatabasesAsync(passwordProtector);
+
+        if (dataConnection != null)
+        {
+            throw new InvalidOperationException(
+                "Cannot get databases except on Entity Framework database connections or database server connections.");
+        }
+
+        var server = await mediator.Send(new GetDatabaseServerQuery(id));
+
+        if (server == null)
+        {
+            throw new InvalidOperationException($"Data connection or server not found: {id}");
+        }
+
+        return await server.GetDatabasesAsync(passwordProtector);
     }
 
     [HttpGet("servers/{id:guid}")]

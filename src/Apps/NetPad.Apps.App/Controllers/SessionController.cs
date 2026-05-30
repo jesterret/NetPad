@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using NetPad.Apps.CQs;
+using NetPad.Dtos;
 using NetPad.Exceptions;
 using NetPad.Scripts;
 using NetPad.Services;
@@ -25,10 +26,16 @@ public class SessionController(IMediator mediator) : ControllerBase
         return await mediator.Send(new GetOpenedScriptEnvironmentsQuery());
     }
 
-    [HttpPatch("open/path")]
-    public async Task OpenByPath([FromBody] string scriptPath)
+    [HttpPatch("open/{scriptId:guid}")]
+    public async Task<ScriptEnvironment> OpenById(Guid scriptId)
     {
-        await mediator.Send(new OpenScriptCommand(scriptPath));
+        return await mediator.Send(new OpenScriptCommand(scriptId));
+    }
+
+    [HttpPatch("open/path")]
+    public async Task<ScriptEnvironment> OpenByPath([FromBody] string scriptPath)
+    {
+        return await mediator.Send(new OpenScriptCommand(scriptPath));
     }
 
     [HttpPatch("{scriptId:guid}/close")]
@@ -42,5 +49,20 @@ public class SessionController(IMediator mediator) : ControllerBase
     {
         var active = await mediator.Send(new GetActiveScriptEnvironmentQuery());
         return active?.Script.Id;
+    }
+
+    [HttpGet("environments/{scriptId:guid}/status")]
+    public async Task<ScriptStatusDto> GetEnvironmentStatus(Guid scriptId)
+    {
+        var environment = await mediator.Send(new GetOpenedScriptEnvironmentQuery(scriptId))
+                          ?? throw new EnvironmentNotFoundException(scriptId);
+
+        return new ScriptStatusDto
+        {
+            ScriptId = environment.Script.Id,
+            Name = environment.Script.Name,
+            Status = environment.Status,
+            RunDurationMs = environment.RunDurationMilliseconds
+        };
     }
 }

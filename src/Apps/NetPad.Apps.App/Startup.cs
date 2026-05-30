@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Reflection;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -10,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NetPad.Apps;
 using NetPad.Apps.CQs;
+using NetPad.Apps.Security;
 using NetPad.Apps.Data.EntityFrameworkCore;
 using NetPad.Apps.Plugins;
 using NetPad.Apps.Resources;
@@ -17,6 +17,7 @@ using NetPad.Apps.UiInterop;
 using NetPad.BackgroundServices;
 using NetPad.Common;
 using NetPad.ExecutionModel;
+using NetPad.Host.Middlewares;
 using NetPad.Host.Swagger;
 using NetPad.Plugins.OmniSharp;
 using NetPad.Scripts;
@@ -55,6 +56,7 @@ public class Startup
         services.AddCoreServices();
 
         // Application services
+        services.AddSingleton<SecurityToken>();
         services.AddSingleton<HostInfo>();
         services.AddTransient<ILogoService, LogoService>();
         services.AddTransient<IIpcService, SignalRIpcService>();
@@ -63,6 +65,11 @@ public class Startup
 
         // Script execution mechanism
         services.AddClientServerExecutionModel();
+
+        // Headless execution (for MCP server and API consumers)
+        services.AddTransient<HeadlessScriptRunnerFactory>();
+        services.AddTransient<HeadlessScriptExecutionService>();
+        services.AddSingleton<ScriptOutputCaptureService>();
 
         // Data connections
         services
@@ -159,6 +166,8 @@ public class Startup
         });
 #endif
 
+        app.UseMiddleware<TokenValidationMiddleware>();
+
 #if DEBUG
         app.UseOpenApi();
         app.UseSwaggerUi();
@@ -224,5 +233,8 @@ public class Startup
         }
 
         hostInfo.SetHostUrl(url);
+
+        var securityToken = app.ApplicationServices.GetRequiredService<SecurityToken>();
+        ConnectionFileManager.Write(url, securityToken.Token, Program.Shell?.GetType().Name);
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using NetPad.Configuration;
 using NetPad.Data;
@@ -33,29 +34,42 @@ public class FileSystemScriptRepository : IScriptRepository
         Directory.CreateDirectory(GetRepositoryDirPath());
     }
 
-    public Task<IEnumerable<ScriptSummary>> GetAllAsync()
+    public async Task<IList<Script>> GetAllAsync()
+    {
+        var scripts = new ConcurrentBag<Script>();
+
+        await Parallel.ForEachAsync(
+            EnumerateScriptFiles(),
+            new ParallelOptions { MaxDegreeOfParallelism = 4 },
+            async (scriptFile, _) =>
+            {
+                try
+                {
+                    var script = await GetAsync(scriptFile);
+                    scripts.Add(script);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Failed to load script: {FilePath}", scriptFile);
+                }
+            });
+
+        return [.. scripts];
+    }
+
+    public Task<IList<ScriptSummary>> GetSummariesAsync()
     {
         var summaries = new List<ScriptSummary>();
 
-        var scriptFiles = EnumerateScriptFiles();
-
-        foreach (var scriptFile in scriptFiles)
+        foreach (var scriptFile in EnumerateScriptFiles())
         {
-            var scriptName = Script.GetNameFromPath(scriptFile);
-            var hasSummary = _serializerFactory.GetForPath(scriptFile)
-                .TryReadSummary(scriptFile, out var scriptIdFromFile, out var scriptKind);
-
-            if (!hasSummary || scriptIdFromFile == null)
+            if (!_serializerFactory.GetForPath(scriptFile).TryReadSummary(scriptFile, out var summary))
                 continue;
 
-            summaries.Add(new ScriptSummary(
-                scriptIdFromFile.Value,
-                scriptName,
-                scriptFile.Replace(Path.PathSeparator, '/'),
-                scriptKind ?? ScriptKind.Program));
+            summaries.Add(summary);
         }
 
-        return Task.FromResult<IEnumerable<ScriptSummary>>(summaries);
+        return Task.FromResult<IList<ScriptSummary>>(summaries);
     }
 
     public Task<Script> CreateAsync(string name, DotNetFrameworkVersion targetFrameworkVersion)
@@ -79,9 +93,7 @@ public class FileSystemScriptRepository : IScriptRepository
         if (!fileInfo.Exists)
             throw new ScriptNotFoundException(path);
 
-        var data = await File.ReadAllTextAsync(path).ConfigureAwait(false);
-
-        return await DeserializeScriptAsync(path, data);
+        return await DeserializeScriptAsync(path);
     }
 
     public async Task<Script?> GetAsync(Guid scriptId)
@@ -99,12 +111,16 @@ public class FileSystemScriptRepository : IScriptRepository
         return null;
     }
 
-    public async Task<List<Script>> GetAsync(HashSet<Guid> scriptIds)
+    public async Task<IList<Script>> GetAsync(HashSet<Guid> scriptIds)
     {
         var scripts = new List<Script>();
+        var remaining = new HashSet<Guid>(scriptIds);
 
         foreach (var scriptFile in EnumerateScriptFiles())
         {
+            if (remaining.Count == 0)
+                break;
+
             Guid? scriptIdFromFile = TryReadScriptId(scriptFile);
 
             if (scriptIdFromFile == null || !scriptIds.Contains(scriptIdFromFile.Value))
@@ -145,6 +161,7 @@ public class FileSystemScriptRepository : IScriptRepository
         if (string.IsNullOrWhiteSpace(newName))
             throw new ArgumentException("Name cannot be empty", nameof(newName));
 
+        // Basic protection against malicious calls
         if (newName.Contains('/') || newName.Contains('\\'))
             throw new InvalidOperationException($"Script name must not contain a path separator");
 
@@ -187,11 +204,11 @@ public class FileSystemScriptRepository : IScriptRepository
         return Task.CompletedTask;
     }
 
-    private async Task<Script> DeserializeScriptAsync(string path, string data)
+    private async Task<Script> DeserializeScriptAsync(string path)
     {
-        var name = Script.GetNameFromPath(path);
-        var script = await _serializerFactory.GetForPath(path)
-            .DeserializeAsync(name, data, _dataConnectionRepository, _dotNetInfo);
+        var script = await _serializerFactory
+            .GetForPath(path)
+            .DeserializeAsync(path, _dataConnectionRepository, _dotNetInfo);
         script.SetPath(path);
         return script;
     }
@@ -208,7 +225,7 @@ public class FileSystemScriptRepository : IScriptRepository
 
     private Guid? TryReadScriptId(string path)
     {
-        _serializerFactory.GetForPath(path).TryReadSummary(path, out var id, out _);
-        return id;
+        _serializerFactory.GetForPath(path).TryReadSummary(path, out var summary);
+        return summary?.Id;
     }
 }
